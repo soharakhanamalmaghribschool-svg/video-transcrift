@@ -1,6 +1,5 @@
-
-import React, { useState, useCallback } from 'react';
-import { AppState, SubtitleSegment } from './types';
+import React, { useState, useEffect } from 'react';
+import { AppState } from './types';
 import VideoPlayer from './components/VideoPlayer';
 import SubtitleOverlay from './components/SubtitleOverlay';
 import AnalysisPanel from './components/AnalysisPanel';
@@ -17,9 +16,22 @@ const App: React.FC = () => {
     error: null,
   });
 
+  // Cleanup object URLs to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (state.videoUrl) {
+        URL.revokeObjectURL(state.videoUrl);
+      }
+    };
+  }, [state.videoUrl]);
+
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Clean up the previous URL if it exists
+      if (state.videoUrl) {
+        URL.revokeObjectURL(state.videoUrl);
+      }
       const url = URL.createObjectURL(file);
       setState(prev => ({ ...prev, videoUrl: url, segments: [], error: null }));
     }
@@ -51,45 +63,51 @@ const App: React.FC = () => {
     try {
       const syncedSegments = await processTranscriptWithAI(state.transcript, state.videoDuration);
       setState(prev => ({ ...prev, segments: syncedSegments, isProcessing: false }));
-      // Auto scroll to analysis
-      window.scrollTo({ top: window.innerHeight, behavior: 'smooth' });
+      
+      setTimeout(() => {
+        document.getElementById('analysis-section')?.scrollIntoView({ behavior: 'smooth' });
+      }, 300);
     } catch (err: any) {
       setState(prev => ({ ...prev, error: err.message, isProcessing: false }));
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* 1st Page View: Interactive Player */}
-      <section className="min-h-screen flex flex-col px-4 py-8 md:px-8 lg:px-16 bg-gradient-to-b from-slate-900 to-slate-950">
-        <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
+    <div className="min-h-screen flex flex-col selection:bg-blue-500/30">
+      {/* Section 1: Interactive Player (Top View) */}
+      <section className="min-h-screen flex flex-col px-6 py-8 lg:px-20 bg-slate-950 relative overflow-hidden">
+        {/* Decorative Gradients */}
+        <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600/5 rounded-full blur-[120px] pointer-events-none"></div>
+
+        <header className="relative z-10 flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
           <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-500/20">
-              <i className="fa-solid fa-closed-captioning text-white text-2xl"></i>
+            <div className="bg-blue-600 p-2.5 rounded-xl shadow-xl shadow-blue-900/40">
+              <i className="fa-solid fa-wand-magic-sparkles text-white text-xl"></i>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-white">SyncSub <span className="text-blue-500">AI</span></h1>
+            <h1 className="text-2xl font-extrabold tracking-tight text-white">SyncSub <span className="text-blue-500">AI</span></h1>
           </div>
 
           <div className="flex gap-4">
-            <label className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-full cursor-pointer transition-all border border-slate-700 shadow-xl">
-              <i className="fa-solid fa-cloud-arrow-up"></i>
-              <span className="font-semibold">Upload Video</span>
+            <label className="flex items-center gap-2 px-6 py-3 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-xl cursor-pointer transition-all border border-slate-800 shadow-xl group">
+              <i className="fa-solid fa-file-video group-hover:text-blue-400 transition-colors"></i>
+              <span className="font-semibold text-sm">Upload Video</span>
               <input type="file" accept="video/*" className="hidden" onChange={handleVideoUpload} />
             </label>
             <button
               onClick={handleProcess}
               disabled={state.isProcessing}
-              className={`flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full font-semibold transition-all shadow-xl shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed`}
+              className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-xl shadow-blue-600/20 disabled:opacity-50"
             >
               {state.isProcessing ? (
                 <>
-                  <i className="fa-solid fa-spinner animate-spin"></i>
-                  <span>Analyzing...</span>
+                  <i className="fa-solid fa-circle-notch animate-spin"></i>
+                  <span>Syncing...</span>
                 </>
               ) : (
                 <>
-                  <i className="fa-solid fa-wand-sparkles"></i>
-                  <span>Analyze & Sync</span>
+                  <i className="fa-solid fa-bolt"></i>
+                  <span>Sync Transcript</span>
                 </>
               )}
             </button>
@@ -97,62 +115,74 @@ const App: React.FC = () => {
         </header>
 
         {state.error && (
-          <div className="max-w-4xl mx-auto w-full mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-xl text-red-400 flex items-center gap-3">
+          <div className="relative z-10 max-w-4xl mx-auto w-full mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 flex items-center gap-3">
             <i className="fa-solid fa-circle-exclamation"></i>
-            <p>{state.error}</p>
+            <p className="font-medium text-sm">{state.error}</p>
           </div>
         )}
 
-        <div className="flex-1 flex flex-col items-center justify-center space-y-8">
-          {state.videoUrl ? (
-            <VideoPlayer
-              url={state.videoUrl}
-              onTimeUpdate={handleTimeUpdate}
-              onLoadedMetadata={handleMetadataLoaded}
-            />
-          ) : (
-            <div className="w-full max-w-4xl aspect-video bg-slate-800/50 border-2 border-dashed border-slate-700 rounded-2xl flex flex-col items-center justify-center text-slate-500 gap-4">
-              <i className="fa-solid fa-film text-6xl opacity-20"></i>
-              <p className="text-xl">Upload a video to get started</p>
-            </div>
-          )}
+        <div className="relative z-10 flex-1 flex flex-col items-center gap-8 max-w-5xl mx-auto w-full">
+          <div className="w-full relative rounded-3xl overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)] bg-black border border-slate-800">
+            {state.videoUrl ? (
+              <VideoPlayer
+                url={state.videoUrl}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleMetadataLoaded}
+              />
+            ) : (
+              <div className="aspect-video flex flex-col items-center justify-center text-slate-600 bg-slate-900/40">
+                <i className="fa-solid fa-clapperboard text-6xl mb-6 opacity-20"></i>
+                <p className="text-lg font-medium">Upload a video to begin</p>
+              </div>
+            )}
+          </div>
 
+          {/* Dynamic Subtitle Overlay */}
           <SubtitleOverlay segments={state.segments} currentTime={state.currentTime} />
 
-          {/* Transcript Input Box (Pest Transcript) */}
-          <div className="w-full max-w-4xl mt-4">
-            <label className="block text-sm font-semibold text-slate-400 uppercase tracking-widest mb-3 ml-1">
-              Transcript Raw Data Source
-            </label>
-            <textarea
-              className="w-full h-40 bg-blue-900/10 border-2 border-blue-500/30 focus:border-blue-500 outline-none p-4 rounded-xl text-slate-200 placeholder-slate-600 resize-none transition-all shadow-inner"
-              placeholder="Paste your long-form transcript here..."
-              value={state.transcript}
-              onChange={handleTranscriptChange}
-            ></textarea>
+          {/* Transcript Input Box */}
+          <div className="w-full">
+            <div className="flex items-center gap-2 mb-3 ml-1">
+                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                <label className="text-xs font-bold text-blue-400 uppercase tracking-widest">
+                  Transcript Source
+                </label>
+            </div>
+            <div className="relative group">
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl blur opacity-10 group-focus-within:opacity-30 transition duration-500"></div>
+                <textarea
+                  className="relative w-full h-40 bg-blue-950/20 border-2 border-blue-500/20 focus:border-blue-500/60 outline-none p-5 rounded-2xl text-blue-50 placeholder-blue-900/40 resize-none transition-all shadow-2xl backdrop-blur-sm scrollbar-thin"
+                  placeholder="Paste your transcript text here..."
+                  value={state.transcript}
+                  onChange={handleTranscriptChange}
+                ></textarea>
+            </div>
           </div>
         </div>
 
-        <div className="flex justify-center mt-12 mb-4 animate-bounce">
+        <div className="relative z-10 flex justify-center mt-12 pb-4">
           <button 
-            onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
-            className="text-slate-500 hover:text-white transition-colors"
+            onClick={() => document.getElementById('analysis-section')?.scrollIntoView({ behavior: 'smooth' })}
+            className="flex flex-col items-center gap-2 text-slate-600 hover:text-blue-400 transition-all group"
           >
-            <i className="fa-solid fa-chevron-down text-2xl"></i>
+            <span className="text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">AI Timeline Breakdown</span>
+            <i className="fa-solid fa-chevron-down text-xl animate-bounce"></i>
           </button>
         </div>
       </section>
 
-      {/* 2nd Page View: AI Analysis */}
-      <section className="min-h-screen bg-slate-950 p-8 md:p-16">
+      {/* Section 2: AI Analysis (Scrollable Bottom View) */}
+      <section id="analysis-section" className="min-h-screen bg-[#020617] px-6 py-20 lg:px-20 border-t border-slate-900">
         <div className="max-w-6xl mx-auto">
-          <div className="flex items-center gap-4 mb-10 border-b border-slate-800 pb-8">
-            <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg shadow-indigo-600/20">
-              <i className="fa-solid fa-brain text-white text-xl"></i>
-            </div>
-            <div>
-              <h2 className="text-3xl font-bold text-white">AI Analysis & Processing</h2>
-              <p className="text-slate-500 mt-1">Detailed breakdown of time-coded segments and synchronization logic.</p>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
+            <div className="flex items-center gap-5">
+                <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/20">
+                  <i className="fa-solid fa-microchip text-white text-2xl"></i>
+                </div>
+                <div>
+                  <h2 className="text-4xl font-bold text-white tracking-tight">Sync Mapping</h2>
+                  <p className="text-slate-500 mt-1 font-medium">Logical segments generated by AI based on video timing.</p>
+                </div>
             </div>
           </div>
 
@@ -161,24 +191,8 @@ const App: React.FC = () => {
             currentTime={state.currentTime}
             isProcessing={state.isProcessing}
           />
-
-          <div className="mt-20 pt-10 border-t border-slate-900 text-center">
-             <p className="text-slate-600 text-sm">
-                Powered by Gemini 3 Flash & Advanced Timestamp Mapping Algorithms
-             </p>
-          </div>
         </div>
       </section>
-
-      {/* Persistent CTA or Info */}
-      <footer className="fixed bottom-6 right-6 z-50">
-         {state.segments.length > 0 && !state.isProcessing && (
-           <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700 px-4 py-2 rounded-full flex items-center gap-3 shadow-2xl">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-tighter">Current Sync</span>
-              <span className="text-blue-400 font-mono text-lg">{Math.floor(state.currentTime / 60)}:{Math.floor(state.currentTime % 60).toString().padStart(2, '0')}</span>
-           </div>
-         )}
-      </footer>
     </div>
   );
 };
