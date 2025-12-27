@@ -1,0 +1,5 @@
+{
+  "name": "Copy of SyncSub AI",
+  "description": "An intelligent video subtitle synchronizer that uses AI to break down transcripts into time-coded segments and displays them dynamically over your video.",
+  "requestFramePermissions": []
+}
